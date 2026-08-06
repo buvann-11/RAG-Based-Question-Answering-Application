@@ -1,0 +1,1 @@
+Architecture diagram shows retrieval and generation modules.

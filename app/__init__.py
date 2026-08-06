@@ -1,0 +1,1 @@
+"""Offline QA application package."""

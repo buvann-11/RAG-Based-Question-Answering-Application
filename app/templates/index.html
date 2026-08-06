@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline Multi-Document QA</title>
+  <link rel="stylesheet" href="/static/styles.css?v=4" />
+</head>
+<body>
+  {% if user %}
+    <main class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">G</span>
+          <div>
+            <h1>Grounded QA</h1>
+            <p>Private documents, local answers.</p>
+          </div>
+        </div>
+
+        <section class="sidebar-card">
+          <div class="sidebar-heading">
+            <h2>Workspace</h2>
+            <span class="chip">{{ user.username }}</span>
+          </div>
+          <form method="post" action="/logout">
+            <button class="ghost-button" type="submit">Log out</button>
+          </form>
+        </section>
+
+        <section class="sidebar-card">
+          <div class="sidebar-heading">
+            <h2>Documents</h2>
+            <span class="chip">{{ documents|length }}</span>
+          </div>
+          <form method="post" action="/upload" enctype="multipart/form-data" class="stack-form">
+            <label class="file-picker">
+              <span>Select file</span>
+              <input type="file" name="file" required />
+            </label>
+            <button class="primary-button" type="submit">Upload</button>
+          </form>
+          <form method="post" action="/reindex">
+            <button class="ghost-button" type="submit">Re-index saved files</button>
+          </form>
+          <p class="muted">Supported: .txt, .md, .pdf, .docx</p>
+          <div class="doc-list">
+            {% for document in documents %}
+              <article class="doc-item">
+                <strong>{{ document.filename }}</strong>
+                <form method="post" action="/documents/{{ document.id }}/delete" class="inline-form">
+                  <button class="mini-button" type="submit">Delete</button>
+                </form>
+              </article>
+            {% else %}
+              <p class="muted">No documents uploaded yet.</p>
+            {% endfor %}
+          </div>
+        </section>
+      </aside>
+
+      <section class="chat-area">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">Offline Multi-Document QA</p>
+            <h2>Ask questions grounded in your files</h2>
+          </div>
+          <span class="status-pill {{ 'warn' if embedder_fallback else '' }}">
+            {{ 'Fallback embeddings' if embedder_fallback else 'Transformer embeddings' }}
+          </span>
+        </header>
+
+        <div class="chat-scroll">
+          <div class="messages">
+            {% if not answer_result %}
+              <article class="message assistant">
+                <div class="avatar">G</div>
+                <div class="bubble">
+                  <p>I can answer questions from your uploaded documents and show exactly which passages supported the answer. If you changed the chunking logic, press <strong>Re-index saved files</strong> once so retrieval uses the newer index.</p>
+                </div>
+              </article>
+            {% endif %}
+
+            {% if display_question %}
+              <article class="message user">
+                <div class="avatar">Y</div>
+                <div class="bubble">
+                  <p>{{ display_question }}</p>
+                </div>
+              </article>
+            {% endif %}
+
+            {% if answer_result %}
+              <article class="message assistant">
+                <div class="avatar">G</div>
+                <div class="bubble">
+                  <p class="answer-text">{{ answer_result.answer }}</p>
+                </div>
+              </article>
+
+              {% if answer_result.grounded %}
+              <section class="evidence-grid">
+                <div class="evidence-panel">
+                  <div class="panel-topline">
+                    <h3>Citations</h3>
+                    <span>{{ answer_result.citations|length }}</span>
+                  </div>
+                  {% for citation in answer_result.citations %}
+                    <article class="evidence-item">
+                      <div class="item-head">
+                        <strong>[{{ citation.index }}] {{ citation.filename }}</strong>
+                        <span>p.{{ citation.page_label }}</span>
+                      </div>
+                      <p>{{ citation.excerpt[:160] }}{% if citation.excerpt|length > 160 %}...{% endif %}</p>
+                      {% if citation.excerpt|length > 160 %}
+                        <details class="read-more">
+                          <summary>Read more</summary>
+                          <p>{{ citation.excerpt }}</p>
+                        </details>
+                      {% endif %}
+                      <small>Hybrid {{ citation.combined_score }} | Semantic {{ citation.semantic_score }} | BM25 {{ citation.lexical_score }}</small>
+                    </article>
+                  {% else %}
+                    <p class="muted">No strong citations were found for this answer.</p>
+                  {% endfor %}
+                </div>
+
+                <div class="evidence-panel">
+                  <div class="panel-topline">
+                    <h3>Retrieved Context</h3>
+                    <span>{{ answer_result.retrievals|length }}</span>
+                  </div>
+                  {% for chunk in answer_result.retrievals %}
+                    <article class="evidence-item">
+                      <div class="item-head">
+                        <strong>{{ chunk.filename }}</strong>
+                        <span>{{ "%.3f"|format(chunk.combined_score) }}</span>
+                      </div>
+                      <p>{{ chunk.content[:320] }}{% if chunk.content|length > 320 %}...{% endif %}</p>
+                      {% if chunk.content|length > 320 %}
+                        <details class="read-more">
+                          <summary>Read more</summary>
+                          <p>{{ chunk.content }}</p>
+                        </details>
+                      {% endif %}
+                      <small>Page {{ chunk.page_label }}</small>
+                    </article>
+                  {% endfor %}
+                </div>
+              </section>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+
+        <form method="post" action="/ask" class="composer" id="ask-form">
+          <textarea name="question" rows="3" placeholder="Ask about the uploaded documents..." required>{{ question or '' }}</textarea>
+          <button class="primary-button composer-button" type="submit">Send</button>
+        </form>
+      </section>
+    </main>
+  {% else %}
+    <main class="auth-shell">
+      <section class="auth-hero">
+        <p class="eyebrow">Offline Document Intelligence</p>
+        <h1>Chat with your files without using external APIs.</h1>
+        <p class="muted">Upload local documents, retrieve with hybrid ranking, and answer with citations you can inspect.</p>
+      </section>
+      <section class="auth-card">
+        <div class="auth-grid">
+          <form method="post" action="/register" class="stack-form">
+            <h2>Create account</h2>
+            <input type="text" name="username" placeholder="Username" required />
+            <input type="password" name="password" placeholder="Password" required />
+            <button class="primary-button" type="submit">Register</button>
+          </form>
+          <form method="post" action="/login" class="stack-form">
+            <h2>Sign in</h2>
+            <input type="text" name="username" placeholder="Username" required />
+            <input type="password" name="password" placeholder="Password" required />
+            <button class="ghost-button" type="submit">Login</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  {% endif %}
+  <script>
+    const askForm = document.getElementById("ask-form");
+    const askInput = askForm ? askForm.querySelector("textarea[name='question']") : null;
+    if (askForm && askInput) {
+      askInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          if (askInput.value.trim()) {
+            askForm.requestSubmit();
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
