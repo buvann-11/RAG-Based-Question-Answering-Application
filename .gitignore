@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Runtime data (accounts, sessions, uploaded documents)
+data/*.sqlite3
+data/uploads/*
+!data/uploads/1/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
