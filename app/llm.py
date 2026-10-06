@@ -33,6 +33,7 @@ def _build_prompt(question: str, citations: Iterable[dict]) -> str:
             )
         )
 
+    excerpts = "\n\n".join(citation_blocks)
     return (
         "You are an offline document question answering assistant.\n"
         "Answer only from the provided excerpts.\n"
@@ -45,7 +46,7 @@ def _build_prompt(question: str, citations: Iterable[dict]) -> str:
         "Every factual sentence must include one or more citation markers like [1] or [2].\n"
         "Do not invent details.\n\n"
         f"Question:\n{question}\n\n"
-        f"Excerpts:\n{'\n\n'.join(citation_blocks)}\n\n"
+        f"Excerpts:\n{excerpts}\n\n"
         "Answer:"
     )
 

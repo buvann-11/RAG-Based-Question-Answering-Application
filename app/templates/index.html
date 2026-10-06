@@ -3,191 +3,174 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Offline Multi-Document QA</title>
-  <link rel="stylesheet" href="/static/styles.css?v=4" />
+  <title>Grounded QA</title>
+  <link rel="stylesheet" href="/static/styles.css?v=5" />
 </head>
 <body>
   {% if user %}
-    <main class="app-shell">
+    <div class="app">
       <aside class="sidebar">
         <div class="brand">
-          <span class="brand-mark">G</span>
+          <span class="logo">G</span>
           <div>
-            <h1>Grounded QA</h1>
-            <p>Private documents, local answers.</p>
+            <strong>Grounded QA</strong>
+            <small>Offline · private</small>
           </div>
         </div>
 
-        <section class="sidebar-card">
-          <div class="sidebar-heading">
-            <h2>Workspace</h2>
-            <span class="chip">{{ user.username }}</span>
-          </div>
-          <form method="post" action="/logout">
-            <button class="ghost-button" type="submit">Log out</button>
-          </form>
-        </section>
+        <form method="post" action="/upload" enctype="multipart/form-data" class="upload" id="upload-form">
+          <label class="dropzone">
+            <input type="file" name="file" accept=".txt,.md,.pdf,.docx" required id="file-input" />
+            <span class="dz-icon">+</span>
+            <span class="dz-text" id="file-label">Upload document</span>
+            <small>PDF, DOCX, TXT, MD</small>
+          </label>
+          <button class="btn btn-primary btn-block" type="submit" id="upload-btn" hidden>Upload</button>
+        </form>
 
-        <section class="sidebar-card">
-          <div class="sidebar-heading">
-            <h2>Documents</h2>
-            <span class="chip">{{ documents|length }}</span>
-          </div>
-          <form method="post" action="/upload" enctype="multipart/form-data" class="stack-form">
-            <label class="file-picker">
-              <span>Select file</span>
-              <input type="file" name="file" required />
-            </label>
-            <button class="primary-button" type="submit">Upload</button>
-          </form>
+        <div class="section-head">
+          <span>Documents</span>
+          <span class="count">{{ documents|length }}</span>
+        </div>
+        <ul class="doc-list">
+          {% for document in documents %}
+            <li class="doc">
+              <span class="doc-icon">{{ document.filename.rsplit('.', 1)[-1][:4]|upper }}</span>
+              <span class="doc-name" title="{{ document.filename }}">{{ document.filename }}</span>
+              <form method="post" action="/documents/{{ document.id }}/delete">
+                <button class="icon-btn" type="submit" title="Delete" aria-label="Delete {{ document.filename }}">&times;</button>
+              </form>
+            </li>
+          {% else %}
+            <li class="empty">No documents yet</li>
+          {% endfor %}
+        </ul>
+
+        <div class="sidebar-foot">
           <form method="post" action="/reindex">
-            <button class="ghost-button" type="submit">Re-index saved files</button>
+            <button class="btn btn-ghost btn-block" type="submit">Re-index files</button>
           </form>
-          <p class="muted">Supported: .txt, .md, .pdf, .docx</p>
-          <div class="doc-list">
-            {% for document in documents %}
-              <article class="doc-item">
-                <strong>{{ document.filename }}</strong>
-                <form method="post" action="/documents/{{ document.id }}/delete" class="inline-form">
-                  <button class="mini-button" type="submit">Delete</button>
-                </form>
-              </article>
-            {% else %}
-              <p class="muted">No documents uploaded yet.</p>
-            {% endfor %}
+          <div class="account">
+            <span class="avatar">{{ user.username[:1]|upper }}</span>
+            <span class="account-name">{{ user.username }}</span>
+            <form method="post" action="/logout">
+              <button class="link-btn" type="submit">Log out</button>
+            </form>
           </div>
-        </section>
+        </div>
       </aside>
 
-      <section class="chat-area">
-        <header class="chat-header">
-          <div>
-            <p class="eyebrow">Offline Multi-Document QA</p>
-            <h2>Ask questions grounded in your files</h2>
-          </div>
-          <span class="status-pill {{ 'warn' if embedder_fallback else '' }}">
-            {{ 'Fallback embeddings' if embedder_fallback else 'Transformer embeddings' }}
+      <main class="main">
+        <header class="topbar">
+          <h1>Ask your documents</h1>
+          <span class="pill {{ 'pill-warn' if embedder_fallback else 'pill-ok' }}">
+            <span class="dot"></span>{{ 'Fallback embeddings' if embedder_fallback else 'MiniLM embeddings' }}
           </span>
         </header>
 
-        <div class="chat-scroll">
-          <div class="messages">
+        <div class="thread">
+          <div class="thread-inner">
             {% if not answer_result %}
-              <article class="message assistant">
-                <div class="avatar">G</div>
-                <div class="bubble">
-                  <p>I can answer questions from your uploaded documents and show exactly which passages supported the answer. If you changed the chunking logic, press <strong>Re-index saved files</strong> once so retrieval uses the newer index.</p>
-                </div>
-              </article>
+              <div class="welcome">
+                <h2>What would you like to know?</h2>
+                <p>Answers come only from your uploaded files, with numbered citations back to the exact page.</p>
+              </div>
             {% endif %}
 
             {% if display_question %}
-              <article class="message user">
-                <div class="avatar">Y</div>
-                <div class="bubble">
-                  <p>{{ display_question }}</p>
-                </div>
-              </article>
+              <div class="msg msg-user"><p>{{ display_question }}</p></div>
             {% endif %}
 
             {% if answer_result %}
-              <article class="message assistant">
-                <div class="avatar">G</div>
-                <div class="bubble">
+              <div class="msg msg-bot">
+                <span class="bot-mark">G</span>
+                <div class="bot-body">
                   <p class="answer-text">{{ answer_result.answer }}</p>
-                </div>
-              </article>
 
-              {% if answer_result.grounded %}
-              <section class="evidence-grid">
-                <div class="evidence-panel">
-                  <div class="panel-topline">
-                    <h3>Citations</h3>
-                    <span>{{ answer_result.citations|length }}</span>
-                  </div>
-                  {% for citation in answer_result.citations %}
-                    <article class="evidence-item">
-                      <div class="item-head">
-                        <strong>[{{ citation.index }}] {{ citation.filename }}</strong>
-                        <span>p.{{ citation.page_label }}</span>
+                  {% if answer_result.grounded %}
+                    {% if answer_result.citations %}
+                      <div class="sources">
+                        {% for citation in answer_result.citations %}
+                          <details class="source">
+                            <summary>
+                              <span class="src-num">{{ citation.index }}</span>
+                              <span class="src-name">{{ citation.filename }}</span>
+                              <span class="src-page">p.{{ citation.page_label }}</span>
+                            </summary>
+                            <p>{{ citation.excerpt }}</p>
+                            <small>Hybrid {{ citation.combined_score }} · Semantic {{ citation.semantic_score }} · BM25 {{ citation.lexical_score }}</small>
+                          </details>
+                        {% endfor %}
                       </div>
-                      <p>{{ citation.excerpt[:160] }}{% if citation.excerpt|length > 160 %}...{% endif %}</p>
-                      {% if citation.excerpt|length > 160 %}
-                        <details class="read-more">
-                          <summary>Read more</summary>
-                          <p>{{ citation.excerpt }}</p>
-                        </details>
-                      {% endif %}
-                      <small>Hybrid {{ citation.combined_score }} | Semantic {{ citation.semantic_score }} | BM25 {{ citation.lexical_score }}</small>
-                    </article>
-                  {% else %}
-                    <p class="muted">No strong citations were found for this answer.</p>
-                  {% endfor %}
-                </div>
+                    {% endif %}
 
-                <div class="evidence-panel">
-                  <div class="panel-topline">
-                    <h3>Retrieved Context</h3>
-                    <span>{{ answer_result.retrievals|length }}</span>
-                  </div>
-                  {% for chunk in answer_result.retrievals %}
-                    <article class="evidence-item">
-                      <div class="item-head">
-                        <strong>{{ chunk.filename }}</strong>
-                        <span>{{ "%.3f"|format(chunk.combined_score) }}</span>
-                      </div>
-                      <p>{{ chunk.content[:320] }}{% if chunk.content|length > 320 %}...{% endif %}</p>
-                      {% if chunk.content|length > 320 %}
-                        <details class="read-more">
-                          <summary>Read more</summary>
+                    <details class="context">
+                      <summary>Retrieved Context ({{ answer_result.retrievals|length }} chunks)</summary>
+                      {% for chunk in answer_result.retrievals %}
+                        <div class="chunk">
+                          <div class="chunk-head">
+                            <span>{{ chunk.filename }} · p.{{ chunk.page_label }}</span>
+                            <span class="score">{{ "%.3f"|format(chunk.combined_score) }}</span>
+                          </div>
                           <p>{{ chunk.content }}</p>
-                        </details>
-                      {% endif %}
-                      <small>Page {{ chunk.page_label }}</small>
-                    </article>
-                  {% endfor %}
+                        </div>
+                      {% endfor %}
+                    </details>
+                  {% endif %}
                 </div>
-              </section>
-              {% endif %}
+              </div>
             {% endif %}
           </div>
         </div>
 
         <form method="post" action="/ask" class="composer" id="ask-form">
-          <textarea name="question" rows="3" placeholder="Ask about the uploaded documents..." required>{{ question or '' }}</textarea>
-          <button class="primary-button composer-button" type="submit">Send</button>
+          <textarea name="question" rows="1" placeholder="Ask a question about your documents…" required>{{ question or '' }}</textarea>
+          <button class="send" type="submit" aria-label="Send" id="send-btn">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z" fill="currentColor"/></svg>
+          </button>
         </form>
-      </section>
-    </main>
+        <p class="hint">Enter to send · Shift+Enter for new line</p>
+      </main>
+    </div>
   {% else %}
-    <main class="auth-shell">
-      <section class="auth-hero">
-        <p class="eyebrow">Offline Document Intelligence</p>
-        <h1>Chat with your files without using external APIs.</h1>
-        <p class="muted">Upload local documents, retrieve with hybrid ranking, and answer with citations you can inspect.</p>
-      </section>
-      <section class="auth-card">
-        <div class="auth-grid">
-          <form method="post" action="/register" class="stack-form">
-            <h2>Create account</h2>
-            <input type="text" name="username" placeholder="Username" required />
-            <input type="password" name="password" placeholder="Password" required />
-            <button class="primary-button" type="submit">Register</button>
-          </form>
-          <form method="post" action="/login" class="stack-form">
-            <h2>Sign in</h2>
-            <input type="text" name="username" placeholder="Username" required />
-            <input type="password" name="password" placeholder="Password" required />
-            <button class="ghost-button" type="submit">Login</button>
-          </form>
+    <main class="auth">
+      <div class="auth-card">
+        <div class="brand brand-center">
+          <span class="logo">G</span>
+          <div>
+            <strong>Grounded QA</strong>
+            <small>Offline document question answering</small>
+          </div>
         </div>
-      </section>
+
+        <input type="radio" name="auth-tab" id="tab-login" checked hidden />
+        <input type="radio" name="auth-tab" id="tab-register" hidden />
+        <div class="tabs">
+          <label for="tab-login">Sign in</label>
+          <label for="tab-register">Create account</label>
+        </div>
+
+        <form method="post" action="/login" class="auth-form form-login">
+          <input type="text" name="username" placeholder="Username" autocomplete="username" required />
+          <input type="password" name="password" placeholder="Password" autocomplete="current-password" required />
+          <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+        </form>
+        <form method="post" action="/register" class="auth-form form-register">
+          <input type="text" name="username" placeholder="Choose a username" autocomplete="username" required />
+          <input type="password" name="password" placeholder="Choose a password" autocomplete="new-password" required />
+          <button class="btn btn-primary btn-block" type="submit">Create account</button>
+        </form>
+
+        <p class="auth-foot">Runs fully on this machine. No data leaves your computer.</p>
+      </div>
     </main>
   {% endif %}
   <script>
     const askForm = document.getElementById("ask-form");
     const askInput = askForm ? askForm.querySelector("textarea[name='question']") : null;
     if (askForm && askInput) {
+      const grow = () => { askInput.style.height = "auto"; askInput.style.height = Math.min(askInput.scrollHeight, 160) + "px"; };
+      askInput.addEventListener("input", grow);
       askInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
@@ -196,7 +179,21 @@
           }
         }
       });
+      askForm.addEventListener("submit", () => {
+        document.getElementById("send-btn").classList.add("loading");
+        askInput.readOnly = true;
+      });
     }
+    const fileInput = document.getElementById("file-input");
+    if (fileInput) {
+      fileInput.addEventListener("change", () => {
+        const f = fileInput.files[0];
+        document.getElementById("file-label").textContent = f ? f.name : "Upload document";
+        document.getElementById("upload-btn").hidden = !f;
+      });
+    }
+    const thread = document.querySelector(".thread");
+    if (thread) thread.scrollTop = thread.scrollHeight;
   </script>
 </body>
 </html>
